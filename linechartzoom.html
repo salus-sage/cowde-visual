@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+ .line {
+        fill: none;
+        stroke: steelblue;
+        stroke-width: 1.5px;
+    }
+
+  .line2 {
+         fill: none;
+         stroke: red;
+         stroke-width: 1.5px;
+     }
+
+.zoom {
+  cursor: move;
+  fill: none;
+  pointer-events: all;
+}
+
+</style>
+
+<!-- Initialize a select button -->
+<select id="selectButton"></select>
+
+<svg width="960" height="500"></svg>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script>
+
+var svg = d3.select("svg"),
+    margin = {top: 20, right: 20, bottom: 110, left: 40},
+    margin2 = {top: 430, right: 20, bottom: 30, left: 40},
+    width = +svg.attr("width") - margin.left - margin.right,
+    height = +svg.attr("height") - margin.top - margin.bottom,
+    height2 = +svg.attr("height") - margin2.top - margin2.bottom;
+
+var parseDate = d3.timeParse("%a %d %b %H:%M:%S  %Y");
+
+var x = d3.scaleTime().range([0, width]),
+    x2 = d3.scaleTime().range([0, width]),
+    y = d3.scaleLinear().range([height, 0]),
+    y2 = d3.scaleLinear().range([height2, 0]);
+
+var xAxis = d3.axisBottom(x),
+    xAxis2 = d3.axisBottom(x2),
+    yAxis = d3.axisLeft(y);
+
+var brush = d3.brushX()
+    .extent([[0, 0], [width, height2]])
+    .on("brush end", brushed);
+
+var zoom = d3.zoom()
+    .scaleExtent([1, Infinity])
+    .translateExtent([[0, 0], [width, height]])
+    .extent([[0, 0], [width, height]])
+    .on("zoom", zoomed);
+
+    var line = d3.line()
+        .x(function (d) { return x(d.date); })
+        .y(function (d) { return y(d.download); });
+
+    var line2 = d3.line()
+        .x(function (d) { return x2(d.date); })
+        .y(function (d) { return y2(d.download); })
+        
+;
+
+    var clip = svg.append("defs").append("svg:clipPath")
+        .attr("id", "clip")
+        .append("svg:rect")
+        .attr("width", width)
+        .attr("height", height)
+        .attr("x", 0)
+        .attr("y", 0); 
+
+
+    var Line_chart = svg.append("g")
+        .attr("class", "focus")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+        .attr("clip-path", "url(#clip)");
+
+
+    var focus = svg.append("g")
+        .attr("class", "focus")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    var context = svg.append("g")
+        .attr("class", "context")
+        .attr("transform", "translate(" + margin2.left + "," + margin2.top + ")");
+
+    
+d3.csv("./needforspeed/master.csv", type, function (error, data) {
+  if (error) throw error;
+
+  // List of groups (here I have one group per column)
+      var allGroup = d3.map(data, function(d){return(d.device)}).keys();
+      console.log(allGroup, "allGroup")
+      
+  // add the options to the button
+      d3.select("#selectButton")
+        .selectAll('myOptions')
+        .data(allGroup)
+        .enter()
+        .append('option')
+        .text(function (d) { return d; }) // text showed in the menu
+        .attr("value", function (d) { return d; }) // corresponding value returned by the button
+  // format month as a date
+  data.forEach(function(d) {
+      d.date = parseDate(d.dateTime);
+  });
+
+  // sort dataset by month
+  data.sort(function(x, y){
+     return d3.ascending(x.date, y.date);
+  });
+  x.domain(d3.extent(data, function(d) { return d.date; }));
+  y.domain([0, d3.max(data, function (d) { return d.download; })]);
+  x2.domain(x.domain());
+  y2.domain(y.domain());
+
+
+
+    focus.append("g")
+        .attr("class", "axis axis--x")
+        .attr("transform", "translate(0," + height + ")")
+        .call(xAxis);
+
+    focus.append("g")
+        .attr("class", "axis axis--y")
+        .call(yAxis);
+
+    Line_chart.append("path")
+        .datum(data.filter(function(d){return d.device==allGroup[0]}))
+        .attr("class", "line")
+        .attr("d", line);
+
+    context.append("path")
+        .datum(data.filter(function(d){return d.device==allGroup[0]}))
+        .attr("class", "line")
+        .attr("d", line2);
+
+
+  context.append("g")
+      .attr("class", "axis axis--x")
+      .attr("transform", "translate(0," + height2 + ")")
+      .call(xAxis2);
+
+  context.append("g")
+      .attr("class", "brush")
+      .call(brush)
+      .call(brush.move, x.range());
+
+  svg.append("rect")
+      .attr("class", "zoom")
+      .attr("width", width)
+      .attr("height", height)
+      .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+      .call(zoom);
+
+
+  // A function that update the chart
+  function update(selectedGroup) {
+    // Create new data with the selection?
+    var dataFilter = data.filter(function(d){return d.device==selectedGroup })
+    console.log(dataFilter)
+    // Give these new data to update line
+    var color = d3.scaleOrdinal()
+                  .domain(allGroup)
+                  .range(["red", "yellow", "green"])
+    Line_chart
+        .datum(dataFilter)
+        .transition()
+        .duration(1000)
+        .attr("d", d3.line()
+          .x(function(d) { return x(+d.date) })
+          .y(function(d) { return y(+d.download) })
+        )
+        .attr("stroke", function(d){ return color(selectedGroup) })
+        .attr("class", "line")
+
+        context.append("path")
+            .datum(data.filter(function(d){return d.device==allGroup[0]}))
+            .attr("class", "line")
+            .attr("d", line2);
+
+
+  }
+
+  // When the button is changed, run the updateChart function
+  d3.select("#selectButton").on("change", function(d) {
+      // recover the option that has been chosen
+      var selectedOption = d3.select(this).property("value")
+      // run the updateChart function with this selected option
+      console.log(selectedOption)
+      update(selectedOption)
+  })
+  console.log(data);
+});
+
+function brushed() {
+  if (d3.event.sourceEvent && d3.event.sourceEvent.type === "zoom") return; // ignore brush-by-zoom
+  var s = d3.event.selection || x2.range();
+  x.domain(s.map(x2.invert, x2));
+  Line_chart.select(".line").attr("d", line);
+  focus.select(".axis--x").call(xAxis);
+  svg.select(".zoom").call(zoom.transform, d3.zoomIdentity
+      .scale(width / (s[1] - s[0]))
+      .translate(-s[0], 0));
+}
+
+function zoomed() {
+  if (d3.event.sourceEvent && d3.event.sourceEvent.type === "brush") return; // ignore zoom-by-brush
+  var t = d3.event.transform;
+  x.domain(t.rescaleX(x2).domain());
+  Line_chart.select(".line").attr("d", line);
+  focus.select(".axis--x").call(xAxis);
+  context.select(".brush").call(brush.move, x.range().map(t.invertX, t));
+}
+
+function type(d) {
+  d.date = parseDate(d.dateTime);
+  d.download = +d.download;
+  return d;
+}
+
+</script>
+
+</html>

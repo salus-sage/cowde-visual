@@ -1,0 +1,14 @@
+#!/bin/bash
+
+dirpath=/home/pi/needforspeed
+logfile=$dirpath/$HOSTNAME.log
+
+date >> $logfile
+speedtest | grep -e 'Download' -e 'Upload' >> $logfile
+printf "\n" >> $logfile
+
+sshpass -p "slot3354" rsync $logfile cowdenet@pantoto.net:~/needforspeed
+
+## copy needforspeed folder in ~
+## make a hostname.log file in that folder
+## add this to the "crontab -e" "0,30 * * * * bash /home/pi/needforspeed/speedlogger.sh"
